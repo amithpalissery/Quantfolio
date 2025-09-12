@@ -1,0 +1,9 @@
+yfinance
+pandas
+numpy
+matplotlib
+sqlalchemy
+ta-lib
+boto3
+langchain
+streamlit
