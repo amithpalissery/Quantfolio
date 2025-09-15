@@ -3,11 +3,13 @@ import streamlit as st
 import pandas as pd
 from database import init_db
 from report_generator import generate_stock_report
-from portfolio_manager import buy_stock, sell_stock, portfolio_status, reset_portfolio
+from portfolio_manager import portfolio_status, reset_portfolio
 from chat_history import get_chat_history, save_chat, init_chat_history, delete_chat
+from llm import memory  # Import the shared memory object
+from config import MEMORY_KEY
 
 # -----------------------------
-# Init DBs
+# Init DBs and Session State
 # -----------------------------
 init_db()
 init_chat_history()
@@ -27,6 +29,8 @@ if history:
         with col2:
             if st.button("❌", key=f"del_{h['id']}"):
                 delete_chat(h["id"])
+                # Clear memory and rerun to avoid state issues
+                memory.clear()
                 st.rerun()
 else:
     st.sidebar.write("No past queries yet.")
@@ -36,27 +40,35 @@ else:
 # -----------------------------
 tab1, tab2 = st.tabs(["💬 AI Stock Assistant", "📊 Portfolio Manager"])
 
+@st.cache_data
+def get_report_and_tickers(query, trade_mode=False):
+    return generate_stock_report(query, trade_mode)
+
+@st.cache_data
+def get_portfolio_status():
+    return portfolio_status()
+
 # -----------------------------
 # Tab 1: AI Assistant
 # -----------------------------
 with tab1:
-    st.subheader("Ask about any Indian stock or sector")
-    query = st.text_input("Your Query:")
-
-    if st.button("Get Analysis", use_container_width=True):
+    st.subheader("Ask about any Indian stock, sector, or compare companies")
+    query = st.text_input("Your Query:", key="ai_query_input")
+    
+    if st.button("Get Analysis", width='stretch'): # FIX
         if query:
             try:
                 with st.spinner("Fetching data & generating report..."):
-                    report, detected_ticker = generate_stock_report(query)
+                    report, detected_tickers = get_report_and_tickers(query)
 
                 st.markdown("### 📌 AI Analysis")
                 st.write(report)
 
-                if detected_ticker:
-                    st.success(f"Detected Ticker: {detected_ticker}")
-
-                # Save only query (not response)
-                save_chat(query, "")
+                if detected_tickers:
+                    st.success(f"Detected Tickers: {', '.join(detected_tickers)}")
+                    
+                # Store the query and response
+                save_chat(query, report)
             except Exception as e:
                 st.error(f"Error while generating report: {e}")
         else:
@@ -69,10 +81,10 @@ with tab2:
     st.subheader("Manage Your Portfolio")
 
     # Show portfolio
-    data = portfolio_status()
+    data = get_portfolio_status()
     if data:
         df = pd.DataFrame(data, columns=["Stock", "Quantity", "Avg Buy Price", "Live Price", "Unrealized P&L"])
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch') # FIX
     else:
         st.info("No holdings yet. Start trading!")
 
@@ -89,15 +101,17 @@ with tab2:
 
     # Trade Box
     st.markdown("### Place Trade")
-    trade_query = st.text_input("Enter trade instruction (e.g. 'Buy 10 Reliance', 'Sell 5 ICICI Bank')")
-
-    if st.button("Execute Trade"):
+    trade_query = st.text_input("Enter trade instruction (e.g. 'Buy 10 Reliance', 'Sell 5 ICICI Bank')", key="trade_input")
+    
+    if st.button("Execute Trade", key="execute_trade_button"):
         if trade_query:
             try:
                 with st.spinner("Processing trade..."):
-                    result, _ = generate_stock_report(trade_query, trade_mode=True)
+                    result, _ = get_report_and_tickers(trade_query, trade_mode=True)
                 st.success(result)
-                save_chat(trade_query, "")
+                save_chat(trade_query, result)
+                # Clear the cache for portfolio status so it updates immediately
+                get_portfolio_status.clear() 
                 st.rerun()
             except Exception as e:
                 st.error(f"Error executing trade: {e}")

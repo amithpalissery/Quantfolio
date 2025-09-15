@@ -1,6 +1,7 @@
 # portfolio_manager.py
 import sqlite3
 import yfinance as yf
+from datetime import datetime, timedelta
 from config import DB_PATH, DEFAULT_QUANTITY
 
 def buy_stock(ticker, price, qty=DEFAULT_QUANTITY):
@@ -129,6 +130,27 @@ def get_live_price(ticker):
     except Exception:
         return None
 
+def get_historical_price(ticker, days_ago):
+    """
+    Fetches the historical closing price for a stock on a date in the past.
+    """
+    try:
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days_ago + 10)  # Add a buffer
+        
+        stock_data = yf.Ticker(ticker).history(start=start_date, end=end_date)
+        
+        target_date = end_date - timedelta(days=days_ago)
+        
+        if stock_data.empty:
+            return None
+            
+        # Get the closest available price to the target date
+        return stock_data.loc[stock_data.index <= str(target_date)].iloc[-1]["Close"]
+
+    except Exception as e:
+        print(f"DEBUG: Error fetching historical price for {ticker}: {e}")
+        return None
 
 def reset_portfolio():
     """Delete all holdings and trades."""

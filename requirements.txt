@@ -7,3 +7,4 @@ ta-lib
 boto3
 langchain
 streamlit
+langchain_aws

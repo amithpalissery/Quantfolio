@@ -1,0 +1,7 @@
+# Ignore the 'aws' folder
+aws/
+
+# Ignore all '.zip' files
+*.zip
+
+__pycache__/
