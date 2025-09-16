@@ -52,16 +52,11 @@ else:
 # -----------------------------
 tab1, tab2 = st.tabs(["💬 AI Stock Assistant", "📊 Portfolio Manager"])
 
-# Use disk persistence for the cache
-@st.cache_data(persist="disk")
 def get_report_and_tickers(query, trade_mode=False):
-    return generate_stock_report(query, trade_mode)
+    return generate_stock_report(query, trade_mode=trade_mode)
 
-@st.cache_data
 def get_portfolio_status():
     return portfolio_status()
-
-# New function to clear the main report cache
 
 # -----------------------------
 # Tab 1: AI Assistant
@@ -126,7 +121,6 @@ with tab2:
                 st.success(result)
                 save_chat(trade_query, result)
                 # Clear the cache for portfolio status so it updates immediately
-                get_portfolio_status.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"Error executing trade: {e}")

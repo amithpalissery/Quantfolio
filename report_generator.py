@@ -21,41 +21,42 @@ def generate_stock_report(query, trade_mode=False):
     if not detected_tickers:
         return "I could not identify any valid stock tickers in your query. Please specify a valid NSE stock.", []
 
-    # Scrape data for all tickers that are not available
-    missing_clean_tickers = []
-    for full_ticker in detected_tickers:
-        clean_ticker = full_ticker.removesuffix('.NS')
-        if clean_ticker not in rag_system.get_available_tickers():
-            missing_clean_tickers.append(clean_ticker)
-
-    if missing_clean_tickers:
-        with st.spinner(f"Scraping new data for: {', '.join(missing_clean_tickers)}..."):
-            scrape_and_save_data(missing_clean_tickers)
-        st.rerun()
-
-    # Use the first ticker for single-ticker logic
     full_ticker = detected_tickers[0]
     clean_ticker = full_ticker.removesuffix('.NS')
 
-    # 2. Proceed with the correct ticker format based on the task
     if trade_mode:
+        # Only update DB, do not scrape data
         action, quantity = get_trade_action(query)
-        price = get_live_price(full_ticker) # Use full_ticker for yfinance lookup
-        if not price:
-            return f"Could not get live price for {full_ticker}.", []
-        
+        # Always resolve ticker to .NS format
+        full_ticker = detected_tickers[0]
+        clean_ticker = full_ticker.removesuffix('.NS')
+        price = get_live_price(full_ticker)
+        price_str = f"{price:.2f}" if price is not None else "N/A"
         if action == "buy":
-            buy_stock(clean_ticker, price, quantity)
-            return f"✅ BUY order executed: {quantity} shares of {clean_ticker} at {price:.2f}", []
+            buy_stock(full_ticker, price if price is not None else 0, quantity)
+            return f"✅ BUY order executed: {quantity} shares of {full_ticker} at {price_str}", []
         elif action == "sell":
             try:
-                sell_stock(clean_ticker, price, quantity)
-                return f"✅ SELL order executed: {quantity} shares of {clean_ticker} at {price:.2f}", []
+                sell_stock(full_ticker, price if price is not None else 0, quantity)
+                return f"✅ SELL order executed: {quantity} shares of {full_ticker} at {price_str}", []
             except RuntimeError as e:
                 return f"⚠️ {e}", []
         else:
             return "I could not understand the trade command.", []
     else:
+        # Scrape data for all tickers that are not available
+        missing_clean_tickers = []
+        for full_ticker in detected_tickers:
+            clean_ticker = full_ticker.removesuffix('.NS')
+            if clean_ticker not in rag_system.get_available_tickers():
+                missing_clean_tickers.append(clean_ticker)
+        if missing_clean_tickers:
+            with st.spinner(f"Scraping new data for: {', '.join(missing_clean_tickers)}..."):
+                scrape_and_save_data(missing_clean_tickers)
+            st.rerun()
+        # Use the first ticker for single-ticker logic
+        full_ticker = detected_tickers[0]
+        clean_ticker = full_ticker.removesuffix('.NS')
         # Retrieve context from the RAG system
         retrieved_context = rag_system.get_context(query, k=3, filter_ticker=clean_ticker)
         if not retrieved_context:
@@ -121,16 +122,15 @@ Be brief and direct, adhering to the specified format.
         return llm_response, detected_tickers
 
 def get_trade_action(query):
+    import re
     query_lower = query.lower()
-    quantity = 1
-    if "buy" in query_lower:
-        parts = query_lower.split("buy")
-        if len(parts) > 1 and parts[0].strip().isdigit():
-            quantity = int(parts[0].strip())
+    # Match 'buy 5 reliance' or 'sell 3 tcs'
+    buy_match = re.search(r"buy\s+(\d+)", query_lower)
+    sell_match = re.search(r"sell\s+(\d+)", query_lower)
+    if buy_match:
+        quantity = int(buy_match.group(1))
         return "buy", quantity
-    elif "sell" in query_lower:
-        parts = query_lower.split("sell")
-        if len(parts) > 1 and parts[0].strip().isdigit():
-            quantity = int(parts[0].strip())
+    elif sell_match:
+        quantity = int(sell_match.group(1))
         return "sell", quantity
     return None, None
