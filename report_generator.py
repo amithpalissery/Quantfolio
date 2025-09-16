@@ -1,11 +1,15 @@
-# report_generator.py (Updated)
+# report_generator.py
 import yfinance as yf
 from llm import get_llm_response, resolve_tickers_with_llm
-from rag_system import RAGSystem # NEW: Import RAG System
+from rag_system import RAGSystem
 from portfolio_manager import get_live_price, buy_stock, sell_stock, get_historical_price
+from data_scraper import scrape_and_save_data
+import streamlit as st
+from datetime import date
 
 # Initialize the RAG system globally
 rag_system = RAGSystem()
+today = date.today()
 
 def generate_stock_report(query, trade_mode=False):
     """
@@ -17,51 +21,64 @@ def generate_stock_report(query, trade_mode=False):
     if not detected_tickers:
         return "I could not identify any valid stock tickers in your query. Please specify a valid NSE stock.", []
 
-    # 2. Get the primary ticker (for simplicity)
-    main_ticker = detected_tickers[0]
+    # Scrape data for all tickers that are not available
+    missing_clean_tickers = []
+    for full_ticker in detected_tickers:
+        clean_ticker = full_ticker.removesuffix('.NS')
+        if clean_ticker not in rag_system.get_available_tickers():
+            missing_clean_tickers.append(clean_ticker)
 
+    if missing_clean_tickers:
+        with st.spinner(f"Scraping new data for: {', '.join(missing_clean_tickers)}..."):
+            scrape_and_save_data(missing_clean_tickers)
+        st.rerun()
+
+    # Use the first ticker for single-ticker logic
+    full_ticker = detected_tickers[0]
+    clean_ticker = full_ticker.removesuffix('.NS')
+
+    # 2. Proceed with the correct ticker format based on the task
     if trade_mode:
-        # Trade mode logic remains the same, as it's action-oriented, not report-based
         action, quantity = get_trade_action(query)
-        price = get_live_price(main_ticker)
+        price = get_live_price(full_ticker) # Use full_ticker for yfinance lookup
         if not price:
-            return f"Could not get live price for {main_ticker}.", []
+            return f"Could not get live price for {full_ticker}.", []
         
         if action == "buy":
-            buy_stock(main_ticker, price, quantity)
-            return f"✅ BUY order executed: {quantity} shares of {main_ticker} at {price:.2f}", []
+            buy_stock(clean_ticker, price, quantity)
+            return f"✅ BUY order executed: {quantity} shares of {clean_ticker} at {price:.2f}", []
         elif action == "sell":
             try:
-                sell_stock(main_ticker, price, quantity)
-                return f"✅ SELL order executed: {quantity} shares of {main_ticker} at {price:.2f}", []
+                sell_stock(clean_ticker, price, quantity)
+                return f"✅ SELL order executed: {quantity} shares of {clean_ticker} at {price:.2f}", []
             except RuntimeError as e:
                 return f"⚠️ {e}", []
         else:
             return "I could not understand the trade command.", []
-
     else:
-        # 3. Retrieve context from the RAG system
-        retrieved_context = rag_system.get_context(query, k=3)
+        # Retrieve context from the RAG system
+        retrieved_context = rag_system.get_context(query, k=3, filter_ticker=clean_ticker)
         if not retrieved_context:
             print("No relevant context found in the RAG system.")
             retrieved_context = "No specific data available from screener.in for this query."
         
-        # 4. Fetch additional real-time data from yfinance
+        # Fetch real-time data from yfinance
         try:
-            live_price = get_live_price(main_ticker)
+            live_price = get_live_price(full_ticker) # Use full_ticker for yfinance
             if live_price:
-                yfinance_context = f"Live Price of {main_ticker}: {live_price:.2f}"
+                yfinance_context = f"Live Price of {full_ticker}: {live_price:.2f}"
             else:
-                yfinance_context = f"Could not fetch live price for {main_ticker} from yfinance."
+                yfinance_context = f"Could not fetch live price for {full_ticker} from yfinance."
         except Exception:
             yfinance_context = "Could not fetch live data."
         
-        # 5. Combine all context into a single, comprehensive prompt for the LLM
+        # Combine context and get LLM response
         prompt = f"""
-You are an expert financial analyst. Your task is to provide a concise, point-wise analysis of the stock based on the user's query and the provided context.
+You are an expert financial analyst. Your task is to provide a concise, point-wise analysis of  stockS based on the user's query and the provided context
+Also note that today's date is {today}.
 
-Follow this exact numbered and bullet-point format:
-
+Output Format Rules
+If the user asks for a general stock query of one or more stocks:
 1.  **Summary of Key Findings**
     - **Valuation**: [One sentence on valuation and overall health]
     - **Perfomance**: [One sentence on recent performance]
@@ -72,13 +89,24 @@ Follow this exact numbered and bullet-point format:
     - [Include key metrics like P/E, Market Cap, etc. from the scraped data in the RAG context]
     - [Other relevant metrics]
 
-3.  **Recent News/Events**
-    - [Extract key events from the context, if available]
-    - [Summarize any management commentary]
-
-4. **Deatils**
+3. **Deatils**
     - [summarize and give as points the reamining info retrieved]
 
+If the user asks for specific details about one or more stock or a sector (e.g., shareholding, peer comparison, balance sheet, P&L, cash flow):
+Respond only with the requested data of the identified stocks.
+
+Present the data in a clear, well-formatted tabular format, use multiple tables if more than one stock is present.
+
+After each table, provide 2-3 key bullet points with insights derived from the data presented in the table.
+
+Constraints
+Base all information strictly on the provided context.
+
+Do not hallucinate or add any information that is not in the context.
+
+Do not mention the user's request, for example, "Here is the analysis you asked for..."
+
+Be brief and direct, adhering to the specified format.
 ---
 **Context from Screener.in:**
 {retrieved_context}
@@ -89,13 +117,10 @@ Follow this exact numbered and bullet-point format:
 **User Query:**
 {query}
 """
-        # 6. Get the LLM's response
         llm_response = get_llm_response(prompt)
         return llm_response, detected_tickers
 
 def get_trade_action(query):
-    # This function needs to be a bit more robust for production,
-    # but for now, we'll keep the basic buy/sell logic
     query_lower = query.lower()
     quantity = 1
     if "buy" in query_lower:

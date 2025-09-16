@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 from database import init_db
@@ -7,6 +6,8 @@ from portfolio_manager import portfolio_status, reset_portfolio
 from chat_history import get_chat_history, save_chat, init_chat_history, delete_chat
 from llm import memory  # Import the shared memory object
 from config import MEMORY_KEY
+import os
+import subprocess
 
 # -----------------------------
 # Init DBs and Session State
@@ -17,6 +18,17 @@ init_chat_history()
 st.set_page_config(page_title="Quantfolio India", layout="wide")
 
 st.title("📈 Quantfolio India - AI Stock Assistant")
+
+# Check if scraped_data folder exists and is not empty
+SCRAPED_DATA_PATH = "scraped_data"
+def ensure_scraped_data():
+    if not os.path.exists(SCRAPED_DATA_PATH) or not os.listdir(SCRAPED_DATA_PATH):
+        st.warning("Scraped data not found or empty. Running data scraper...")
+        subprocess.run(["python3", "data_scraper.py"])  # Run the scraper
+        st.success("Data scraping completed. Please rerun the app if needed.")
+        st.stop()
+
+ensure_scraped_data()
 
 # Sidebar – show past queries with delete option
 st.sidebar.header("Past Queries")
@@ -40,13 +52,16 @@ else:
 # -----------------------------
 tab1, tab2 = st.tabs(["💬 AI Stock Assistant", "📊 Portfolio Manager"])
 
-@st.cache_data
+# Use disk persistence for the cache
+@st.cache_data(persist="disk")
 def get_report_and_tickers(query, trade_mode=False):
     return generate_stock_report(query, trade_mode)
 
 @st.cache_data
 def get_portfolio_status():
     return portfolio_status()
+
+# New function to clear the main report cache
 
 # -----------------------------
 # Tab 1: AI Assistant
@@ -55,7 +70,7 @@ with tab1:
     st.subheader("Ask about any Indian stock, sector, or compare companies")
     query = st.text_input("Your Query:", key="ai_query_input")
     
-    if st.button("Get Analysis", width='stretch'): # FIX
+    if st.button("Get Analysis", width='stretch'):
         if query:
             try:
                 with st.spinner("Fetching data & generating report..."):
@@ -84,7 +99,7 @@ with tab2:
     data = get_portfolio_status()
     if data:
         df = pd.DataFrame(data, columns=["Stock", "Quantity", "Avg Buy Price", "Live Price", "Unrealized P&L"])
-        st.dataframe(df, width='stretch') # FIX
+        st.dataframe(df, width='stretch')
     else:
         st.info("No holdings yet. Start trading!")
 
@@ -111,7 +126,7 @@ with tab2:
                 st.success(result)
                 save_chat(trade_query, result)
                 # Clear the cache for portfolio status so it updates immediately
-                get_portfolio_status.clear() 
+                get_portfolio_status.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"Error executing trade: {e}")

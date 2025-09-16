@@ -47,6 +47,7 @@ def resolve_tickers_with_llm(query: str) -> list[str]:
     """
     prompt = f"""
 Identify all NSE stock tickers mentioned in the user's query: "{query}"
+user may ask about multiple stocks or sectors. if asked about a sector, return the top 3 relevant tickers from that sector. or user may give a common name of a company in query like south indian bank, return the correct ticker.
 Respond ONLY with a JSON list of the ticker symbols. 
 Each ticker symbol must end with '.NS' and be in uppercase.
 Example response: ["TCS.NS", "RELIANCE.NS"]
