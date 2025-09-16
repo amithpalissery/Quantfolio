@@ -19,7 +19,7 @@ Quantfolio is an AI-powered financial analysis and portfolio management app for 
 ### 2. Stock Analysis & RAG System
 - **`report_generator.py`:**
   - Resolves tickers using LLM.
-  - Scrapes missing data as needed.
+  - Scrapes  data of resolved tickers as needed.
   - Retrieves context from the RAG system (`rag_system.py`).
   - Combines real-time data (via yfinance) and context for LLM analysis.
   - Executes trades and returns confirmation with live price.
