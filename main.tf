@@ -16,9 +16,6 @@ resource "aws_instance" "runner_instance" {
   instance_type = var.instance_type
   key_name      = var.key_name
 
-  tags = {
-    Name = "Amith_instance"
-  }
 
   connection {
     type        = "ssh"
