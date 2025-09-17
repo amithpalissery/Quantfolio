@@ -8,6 +8,15 @@ Quantfolio is an AI-powered financial analysis and portfolio management app for 
 - **Data Scraping:** Automatically scrapes and updates financial data for requested stocks from Screener.in and other sources.
 - **Chat History:** Stores all your queries and AI responses for easy reference.
 
+<img width="1916" height="913" alt="image" src="https://github.com/user-attachments/assets/ac7b9d48-a7de-48ae-9765-d8a3d7af2b2b" />
+
+<img width="1913" height="908" alt="Screenshot 2025-09-17 212142" src="https://github.com/user-attachments/assets/eb0ed3d8-b55c-49a9-8e52-5754c2540fff" />
+
+
+<img width="1916" height="900" alt="Screenshot 2025-09-17 211934" src="https://github.com/user-attachments/assets/abf83e3e-5532-4671-9d33-77603c2bace5" />
+
+
+
 ## Architecture & Workflow
 
 ### 1. Streamlit UI (`app.py`)
