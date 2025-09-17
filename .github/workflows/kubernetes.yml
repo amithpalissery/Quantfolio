@@ -26,7 +26,7 @@ jobs:
       - name: Terraform Apply
         id: apply
         run: terraform apply -auto-approve -var="key_name=amithnv" -var="private_key_content=${{ secrets.SSH_PRIVATE_KEY }}"
-        working-directory: ./terraform
+        working-directory: .
 
       - name: Get EC2 Public IP
         id: get-ip
