@@ -1,12 +1,10 @@
 name: Deploy Cluster and Microservices
-
 on:
   workflow_dispatch:
 
 jobs:
   bootstrap-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,21 +33,75 @@ jobs:
         run: |
           IP=$(terraform output -raw instance_public_ip)
           echo "EC2_IP=$IP" >> $GITHUB_ENV
-        working-directory: ./terraform
 
-      - name: Run Kubeadm Init and configure kubectl
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ env.EC2_IP }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            sudo hostnamectl set-hostname kmaster
-            sudo kubeadm init
-            mkdir -p $HOME/.kube
-            sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-            sudo chown $(id -u):$(id -g) $HOME/.kube/config
-            kubectl get nodes
-            kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
-            kubectl describe node kmaster | grep Taint
-            kubectl taint node kmaster node-role.kubernetes.io/control-plane:NoSchedule- || true
+      - name: Wait for Kubernetes cluster setup
+        run: |
+          echo "Waiting for Kubernetes cluster to be ready on EC2..."
+          sleep 60  # Give some time for setup-cluster.sh to complete
+
+      - name: Setup SSH key for remote execution
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+      - name: Copy Kubernetes manifests to EC2
+        run: |
+          scp -i private_key.pem -o StrictHostKeyChecking=no -r kubernets/ ubuntu@${{ env.EC2_IP }}:~/
+
+      - name: Create Kubernetes Secret for AWS Credentials
+        run: |
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_IP }} "
+            kubectl create secret generic aws-credentials \
+              --from-literal=AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' \
+              --from-literal=AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' \
+              --from-literal=AWS_REGION='${{ vars.AWS_REGION }}' \
+              --dry-run=client -o yaml | kubectl apply -f -
+          "
+        continue-on-error: true
+
+      - name: Deploy to Kubernetes
+        run: |
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_IP }} "
+            # Substitute Docker image name in deployment.yaml
+            sed -i 's/\${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_USERNAME }}/g' ~/kubernets/deployment.yaml
+            
+            # Apply deployments and services
+            kubectl apply -f ~/kubernets/deployment.yaml
+            kubectl apply -f ~/kubernets/service.yaml
+            
+            # Wait for deployments to be ready
+            kubectl rollout status deployment/quantfolio-app --timeout=300s
+          "
+
+      - name: Verify Deployment
+        run: |
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_IP }} "
+            echo 'Checking deployment status...'
+            kubectl get pods
+            kubectl get services
+            
+            echo 'Service endpoints:'
+            kubectl get svc -o wide
+          "
+
+      - name: Output Connection Info
+        run: |
+          echo "Cluster IP: ${{ env.EC2_IP }}"
+          
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_IP }} "
+            echo 'Getting service information...'
+            kubectl get svc quantfolio-service
+            
+            # Get the NodePort for external access
+            NODE_PORT=\$(kubectl get svc quantfolio-service -o jsonpath='{.spec.ports[0].nodePort}')
+            echo \"\"
+            echo \"🚀 Your Quantfolio app is accessible at:\"
+            echo \"   http://${{ env.EC2_IP }}:\$NODE_PORT\"
+            echo \"\"
+            echo \"Service Details:\"
+            kubectl get svc quantfolio-service -o wide
+          "
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f private_key.pem
