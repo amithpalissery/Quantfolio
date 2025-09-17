@@ -34,11 +34,6 @@ jobs:
           IP=$(terraform output -raw instance_public_ip)
           echo "EC2_IP=$IP" >> $GITHUB_ENV
 
-      - name: Wait for Kubernetes cluster setup
-        run: |
-          echo "Waiting for Kubernetes cluster to be ready on EC2..."
-          sleep 60  # Give some time for setup-cluster.sh to complete
-
       - name: Setup SSH key for remote execution
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key.pem
