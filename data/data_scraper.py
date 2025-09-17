@@ -8,6 +8,10 @@ import logging
 import re
 from typing import Dict, Any, List, Optional, Union
 from requests.adapters import HTTPAdapter
+try:
+    from data.data_fetcher import get_fundamentals, get_technicals
+except ModuleNotFoundError:
+    from data_fetcher import get_fundamentals, get_technicals
 from requests.packages.urllib3.util.retry import Retry
 
 # Setup logging

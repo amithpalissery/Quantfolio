@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-from database import init_db
-from report_generator import generate_stock_report
-from portfolio_manager import portfolio_status, reset_portfolio
-from chat_history import get_chat_history, save_chat, init_chat_history, delete_chat
-from llm import memory  # Import the shared memory object
+from db.database import init_db
+from core.report_generator import generate_stock_report
+from db.portfolio_manager import portfolio_status, reset_portfolio
+from db.chat_history import get_chat_history, save_chat, init_chat_history, delete_chat
+from core.llm import memory  # Import the shared memory object
 from config import MEMORY_KEY
 import os
 import subprocess
@@ -24,7 +24,7 @@ SCRAPED_DATA_PATH = "scraped_data"
 def ensure_scraped_data():
     if not os.path.exists(SCRAPED_DATA_PATH) or not os.listdir(SCRAPED_DATA_PATH):
         st.warning("Scraped data not found or empty. Running data scraper...")
-        subprocess.run(["python3", "data_scraper.py"])  # Run the scraper
+        subprocess.run(["python3", "data/data_scraper.py"])  # Run the scraper
         st.success("Data scraping completed. Please rerun the app if needed.")
         st.stop()
 

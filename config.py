@@ -1,5 +1,5 @@
 # config.py
-DB_PATH = "portfolio.db"
+DB_PATH = "db/portfolio.db"
 DEFAULT_QUANTITY = 10
 TRADE_COOLDOWN_DAYS = 7
 

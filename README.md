@@ -70,15 +70,33 @@ Quantfolio is an AI-powered financial analysis and portfolio management app for 
 - Do not hardcode secrets in code or images.
 
 ## Folder Structure
-- `app.py` - Main Streamlit app
-- `report_generator.py` - Stock analysis and trade logic
-- `rag_system.py` - RAG context retrieval
-- `data_scraper.py` - Scraping logic
-- `portfolio_manager.py` - Portfolio DB and calculations
-- `llm.py` - LLM integration
-- `chat_history.py` - Chat history management
-- `scraped_data/` - JSON data for stocks
-- `portfolio.db`, `chat_history.db` - SQLite databases
+```
+Quantfolio/
+│
+├── app.py                  # Main Streamlit UI
+├── config.py               # Configuration settings
+├── requirements.txt
+│
+├── core/                   # Core business logic
+│   ├── report_generator.py
+│   ├── rag_system.py
+│   ├── llm.py
+│
+├── data/                   # Data scraping and processing
+│   ├── data_scraper.py
+│   ├── data_fetcher.py
+│
+├── db/                     # Database and portfolio management
+│   ├── portfolio_manager.py
+│   ├── database.py
+│   ├── chat_history.py
+│
+├── scraped_data/           # Scraped JSON data
+│
+├── portfolio.db, chat_history.db  # SQLite databases
+│
+└── README.md
+```
 
 ## Contributing
 Pull requests and suggestions are welcome!

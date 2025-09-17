@@ -1,10 +1,10 @@
 {
     "company_name": "Reliance Industries Ltd",
     "ratios": {
-        "Market Cap": "₹18,98,605Cr.",
-        "Current Price": "₹1,403",
+        "Market Cap": "₹19,09,364Cr.",
+        "Current Price": "₹1,411",
         "High / Low": "₹1,551/1,115",
-        "Stock P/E": 25.2,
+        "Stock P/E": 25.4,
         "Book Value": "₹623",
         "Dividend Yield": 0.39,
         "ROCE": 9.69,
@@ -751,7 +751,7 @@
     "events": [],
     "announcements": [],
     "_metadata": {
-        "scraped_at": 1758014595.7445822,
+        "scraped_at": 1758084273.0137808,
         "url_used": "https://www.screener.in/company/RELIANCE/consolidated/",
         "ticker": "RELIANCE"
     }

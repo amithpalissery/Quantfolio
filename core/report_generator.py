@@ -1,9 +1,9 @@
 # report_generator.py
 import yfinance as yf
-from llm import get_llm_response, resolve_tickers_with_llm
-from rag_system import RAGSystem
-from portfolio_manager import get_live_price, buy_stock, sell_stock, get_historical_price
-from data_scraper import scrape_and_save_data
+from core.llm import get_llm_response, resolve_tickers_with_llm
+from core.rag_system import RAGSystem
+from db.portfolio_manager import get_live_price, buy_stock, sell_stock, get_historical_price
+from data.data_scraper import scrape_and_save_data
 import streamlit as st
 from datetime import date
 
@@ -54,28 +54,27 @@ def generate_stock_report(query, trade_mode=False):
             with st.spinner(f"Scraping new data for: {', '.join(missing_clean_tickers)}..."):
                 scrape_and_save_data(missing_clean_tickers)
             st.rerun()
-        # Use the first ticker for single-ticker logic
-        full_ticker = detected_tickers[0]
-        clean_ticker = full_ticker.removesuffix('.NS')
-        # Retrieve context from the RAG system
-        retrieved_context = rag_system.get_context(query, k=3, filter_ticker=clean_ticker)
-        if not retrieved_context:
-            print("No relevant context found in the RAG system.")
-            retrieved_context = "No specific data available from screener.in for this query."
-        
-        # Fetch real-time data from yfinance
-        try:
-            live_price = get_live_price(full_ticker) # Use full_ticker for yfinance
-            if live_price:
-                yfinance_context = f"Live Price of {full_ticker}: {live_price:.2f}"
-            else:
-                yfinance_context = f"Could not fetch live price for {full_ticker} from yfinance."
-        except Exception:
-            yfinance_context = "Could not fetch live data."
-        
+        # Retrieve context for all tickers
+        all_context = ""
+        all_yfinance = ""
+        for full_ticker in detected_tickers:
+            clean_ticker = full_ticker.removesuffix('.NS')
+            context = rag_system.get_context(query, k=3, filter_ticker=clean_ticker)
+            if not context:
+                context = f"No specific data available from screener.in for {clean_ticker}."
+            try:
+                live_price = get_live_price(full_ticker)
+                if live_price:
+                    yfinance_context = f"Live Price of {full_ticker}: {live_price:.2f}"
+                else:
+                    yfinance_context = f"Could not fetch live price for {full_ticker} from yfinance."
+            except Exception:
+                yfinance_context = "Could not fetch live data."
+            all_context += f"\n--- {clean_ticker} ---\n{context}\n"
+            all_yfinance += f"\n--- {clean_ticker} ---\n{yfinance_context}\n"
         # Combine context and get LLM response
         prompt = f"""
-You are an expert financial analyst. Your task is to provide a concise, point-wise analysis of  stockS based on the user's query and the provided context
+You are an expert financial analyst. Your task is to provide a concise, point-wise analysis of stocks based on the user's query and the provided context
 Also note that today's date is {today}.
 
 Output Format Rules
@@ -110,10 +109,10 @@ Do not mention the user's request, for example, "Here is the analysis you asked 
 Be brief and direct, adhering to the specified format.
 ---
 **Context from Screener.in:**
-{retrieved_context}
+{all_context}
 ---
 **Real-time Data:**
-{yfinance_context}
+{all_yfinance}
 ---
 **User Query:**
 {query}
