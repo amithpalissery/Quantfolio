@@ -18,4 +18,4 @@ COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python
 COPY --from=builder /app /app
 
 # Set the entry point for your app
-CMD ["streamlit", "run", "your_app.py"]
+CMD ["python", "-m", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
