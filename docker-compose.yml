@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  quantfolio_app:
+    build: .
+    container_name: quantfolio_app_container
+    ports:
+      - "8501:8501"
+    volumes:
+      - quantfolio_data:/app/db
+      - quantfolio_data:/app/scraped_data
+
+volumes:
+  quantfolio_data:
+    driver: local
