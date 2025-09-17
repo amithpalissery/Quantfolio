@@ -5,3 +5,6 @@ aws/
 *.zip
 
 __pycache__/
+
+venv/
+
