@@ -1,0 +1,80 @@
+- name: Deploy Cluster and Microservices
+  on:
+    workflow_dispatch:
+
+  jobs:
+    bootstrap-and-deploy:
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Setup Terraform
+          uses: hashicorp/setup-terraform@v3
+
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ vars.AWS_REGION }}
+
+        - name: Terraform Init
+          run: terraform init
+
+        - name: Terraform Apply
+          id: apply
+          run: |
+            terraform apply -auto-approve \
+              -var="key_name=amithnv" \
+              -var="private_key_content=${{ secrets.SSH_PRIVATE_KEY }}"
+          
+        - name: Get EC2 Public IP
+          id: get-ip
+          run: |
+            IP=$(terraform output -raw instance_public_ip)
+            echo "EC2_IP=$IP" >> $GITHUB_ENV
+
+        - name: Wait for EC2 Instance to be ready
+          run: |
+            echo "Waiting for instance to be ready at ${{ env.EC2_IP }}..."
+            for i in {1..30}; do
+              if ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ env.EC2_IP }} "echo 'Connected'"; then
+                echo "Instance is ready."
+                exit 0
+              fi
+              echo "Attempt $i failed. Retrying in 10 seconds..."
+              sleep 10
+            done
+            echo "Failed to connect to instance."
+            exit 1
+          env:
+            SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+          
+        - name: Run Kubeadm Init and configure kubectl
+          uses: appleboy/ssh-action@master
+          with:
+            host: ${{ env.EC2_IP }}
+            username: ubuntu
+            key: ${{ secrets.SSH_PRIVATE_KEY }}
+            script: |
+              sudo hostnamectl set-hostname kmaster
+              sudo kubeadm init
+              mkdir -p $HOME/.kube
+              sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+              sudo chown $(id -u):$(id -g) $HOME/.kube/config
+              kubectl get nodes
+              kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
+              kubectl describe node kmaster | grep Taint
+              kubectl taint node kmaster node-role.kubernetes.io/control-plane:NoSchedule- || true
+
+        - name: Deploy Kubernetes Manifests
+          uses: appleboy/ssh-action@master
+          with:
+            host: ${{ env.EC2_IP }}
+            username: ubuntu
+            key: ${{ secrets.SSH_PRIVATE_KEY }}
+            script: |
+              cd /home/ubuntu/<your_repo_name> # Navigate to your project directory
+              kubectl apply -f kubernetes/
