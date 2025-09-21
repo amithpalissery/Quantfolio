@@ -110,5 +110,5 @@ Quantfolio/
 ## Contributing
 Pull requests and suggestions are welcome!
 
-## License
+## License 
 MIT
